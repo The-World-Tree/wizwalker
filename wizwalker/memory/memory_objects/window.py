@@ -443,40 +443,60 @@ class DeckListControl(Window):
     async def read_base_address(self) -> int:
         raise NotImplementedError()
 
+    # Offsets for r800294.  m_cardSize / m_spacing / m_verticalSpacingAdjust are from the
+    # type dump; the entry vector and start index are unreflected and were found by probe.
+
     async def spell_entries(self) -> List[DeckListControlSpellEntry]:
-        return await self.read_inlined_vector(0x280, 0x28, DeckListControlSpellEntry)
+        return await self.read_inlined_vector(0x300, 0x28, DeckListControlSpellEntry)
+
+    async def start_index(self) -> int:
+        """Index of the first visible entry: page * 16 for ItemSpells."""
+        return await self.read_value_from_offset(0x320, Primitive.uint32)
+
+    async def write_start_index(self, start_index: int):
+        """Turn the page.  The game keeps a second page counter that only its page
+        buttons update -- see DeckBuilder.set_page before mixing the two."""
+        return await self.write_value_to_offset(0x320, start_index, Primitive.uint32)
 
     async def card_size_horizontal(self) -> int:
-        return await self.read_value_from_offset(0x2A4, Primitive.uint32)
+        return await self.read_value_from_offset(0x324, Primitive.uint32)
 
     async def card_size_vertical(self) -> int:
-        return await self.read_value_from_offset(0x2A8, Primitive.uint32)
+        return await self.read_value_from_offset(0x328, Primitive.uint32)
 
     async def card_spacing(self) -> int:
-        return await self.read_value_from_offset(0x2AC, Primitive.uint32)
+        return await self.read_value_from_offset(0x32C, Primitive.uint32)
 
     async def card_spacing_vertical_adjust(self) -> int:
-        return await self.read_value_from_offset(0x2B0, Primitive.uint32)
+        return await self.read_value_from_offset(0x330, Primitive.uint32)
 
 
 class SpellListControl(Window):
     async def read_base_address(self) -> int:
         raise NotImplementedError()
 
+    # Offsets for r800294.  m_cardSize is from the type dump; the entry vector and start
+    # index are unreflected and were found by probe.  The start index has sat 4 bytes
+    # before m_cardSize in every build so far -- 0x308 here was r794561's, and is now the
+    # entry vector's end pointer, so writing it crashes the client.
+
     async def spell_entries(self) -> List[SpellListControlSpellEntry]:
         return await self.read_inlined_vector(0x300, 0x78, SpellListControlSpellEntry)
 
     async def card_size_horizontal(self) -> int:
-        return await self.read_value_from_offset(0x30C, Primitive.uint32)
+        return await self.read_value_from_offset(0x38C, Primitive.uint32)
 
     async def card_size_vertical(self) -> int:
-        return await self.read_value_from_offset(0x310, Primitive.uint32)
+        return await self.read_value_from_offset(0x390, Primitive.uint32)
 
     async def start_index(self) -> int:
-        return await self.read_value_from_offset(0x308, Primitive.uint32)
+        """Index of the first visible entry: page * 6 for AllPageSpellList."""
+        return await self.read_value_from_offset(0x388, Primitive.uint32)
 
     async def write_start_index(self, start_index: int):
-        return await self.write_value_to_offset(0x308, start_index, Primitive.uint32)
+        """Turn the page.  The game keeps a second page counter that only its page
+        buttons update -- see DeckBuilder.set_page before mixing the two."""
+        return await self.write_value_to_offset(0x388, start_index, Primitive.uint32)
 
 
 class DynamicWindow(DynamicMemoryObject, Window):

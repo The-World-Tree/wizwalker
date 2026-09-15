@@ -671,10 +671,28 @@ class DeckBuilder:
         return await self._pred_match_template_name(deck_list_get_cards_with_predicate, template_name)
 
     async def set_page(self, page_number: int):
-        # Write memory address value to update the card page
+        """Show spellbook page ``page_number`` (0-based) by writing the list's start index.
+
+        The game draws the page, and clicks and PageDown behave as if it had been
+        paged to.  But it also keeps a second page counter that only PageUp/PageDown
+        update, and two things read that one instead:
+
+        - The buttons' enabled state.  After writing a later page, PageUp stays
+          greyed and clicking it does nothing.
+        - Closing the tier flyout, which restores the page from it -- to page 1
+          after a write.
+
+        So never mix set_page with the page buttons, and call it again after
+        closing a flyout.
+        """
         spell_list_window = await _maybe_get_named_window(self._deck_config_window, "AllPageSpellList")
         spell_list_control = DynamicSpellListControl(self.client.hook_handler, await spell_list_window.read_base_address())
-        await spell_list_control.write_start_index(page_number*6)
+        # Only whole pages within the list have been tested; a start index past the
+        # end may be read as an entry.
+        page_count = max(1, math.ceil(len(await spell_list_control.spell_entries()) / 6))
+        if not 0 <= page_number < page_count:
+            raise ValueError(f"page {page_number} is outside the spellbook's {page_count} page(s)")
+        await spell_list_control.write_start_index(page_number * 6)
 
     async def get_spell_list_rectangle(self) -> Rectangle:
         # Returns the size of the window as a rectangle so we can subdivide it later
@@ -835,10 +853,10 @@ class DeckBuilder:
     async def _add_all_normal_cards(self, section: dict) -> None:
         """Add all normal deck cards from a preset section.
 
-        set_page() writes to offset 0x308 (the vector end_ptr), corrupting game
-        memory and crashing the client. Use PageUp/PageDown UI buttons instead.
-        Spell positions are precomputed before any page navigation to avoid
-        re-reading the list after the vector is potentially disturbed.
+        Pages with the PageUp/PageDown buttons.  set_page() once crashed the
+        client by writing a stale offset (the entry vector's end pointer); that
+        is fixed, but it must not be mixed with these button clicks -- see its
+        docstring.  Spell positions are precomputed before any page navigation.
 
         Normal and tiered cards are merged into one queue sorted by page so the
         entire spellbook is traversed in a single forward sweep.
